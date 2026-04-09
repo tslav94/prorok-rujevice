@@ -140,7 +140,7 @@ function App() {
   return (
     <div className="flex flex-col items-center p-6 pb-20">
       <header className="mb-6 text-center mt-6 w-full max-w-md">
-        <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok s Rujevice 🌊</h1>
+        <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok Rujevice ⚪️🔵</h1>
         
         <div className="flex bg-slate-800 rounded-xl p-1 mt-6 border border-slate-700">
           <button onClick={() => setAktivniTab('unos')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${aktivniTab === 'unos' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Aktivno Kolo</button>
