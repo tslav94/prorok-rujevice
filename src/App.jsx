@@ -14,10 +14,13 @@ function App() {
 
   const [aktivniTab, setAktivniTab] = useState('unos')
   const [poredak, setPoredak] = useState([])
+  
+  // NOVO: Stanje za prikazivanje pravila
+  const [pokaziPravila, setPokaziPravila] = useState(false)
 
   useEffect(() => {
     fetchIgraci()
-    fetchZadnjaUtakmica()
+    fetchTrenutnaUtakmica()
     fetchPoredak()
   }, [])
 
@@ -26,11 +29,21 @@ function App() {
     if (data) setIgraci(data)
   }
 
-  async function fetchZadnjaUtakmica() {
-    const { data } = await supabase.from('utakmice').select('*').order('id', { ascending: false }).limit(1).single()
-    if (data) {
-      setAktivnaUtakmica(data)
-      fetchPrognoze(data.id)
+  // PAMETNO UČITAVANJE UTAKMICE
+  async function fetchTrenutnaUtakmica() {
+    // 1. Prvo traži postoji li neka OTVORENA utakmica
+    const { data: otvorena } = await supabase.from('utakmice').select('*').eq('status', 'otvorena').single()
+    
+    if (otvorena) {
+      setAktivnaUtakmica(otvorena)
+      fetchPrognoze(otvorena.id)
+    } else {
+      // 2. Ako nema otvorene, daj zadnju ZAVRŠENU da ekipa vidi rezultate
+      const { data: zavrsena } = await supabase.from('utakmice').select('*').eq('status', 'zavrsena').order('id', { ascending: false }).limit(1).single()
+      if (zavrsena) {
+        setAktivnaUtakmica(zavrsena)
+        fetchPrognoze(zavrsena.id)
+      }
     }
   }
 
@@ -87,11 +100,9 @@ function App() {
     if (!sluzbeniBroj) return alert("Unesi službeni broj sa stadiona!")
     const tocanBroj = parseInt(sluzbeniBroj)
 
-    // 1. Izračunaj tko je igrao, a tko nije
     const igraciKojiSuIgraliIds = svePrognoze.map(p => p.igrac_id)
     const igraciKojiNisuIgrali = igraci.filter(i => !igraciKojiSuIgraliIds.includes(i.id))
 
-    // 2. Obrada onih koji su poslali prognozu
     let obrada = svePrognoze.map(p => ({ ...p, razlika: Math.abs(p.broj_gledatelja - tocanBroj) }))
     obrada.sort((a, b) => a.razlika - b.razlika)
 
@@ -116,7 +127,6 @@ function App() {
       }
     }
 
-    // 3. Kazna za one koji NISU igrali (-2 boda)
     for (let igrac of igraciKojiNisuIgrali) {
       await supabase.from('prognoze').insert([{
         igrac_id: igrac.id,
@@ -128,17 +138,62 @@ function App() {
       }])
     }
 
-    // 4. Zaključaj utakmicu
     await supabase.from('utakmice').update({ status: 'zavrsena', sluzbeni_broj: tocanBroj }).eq('id', aktivnaUtakmica.id)
 
     alert("Bodovi izračunati! Kazne za neigranje (-2) su dodijeljene.")
     setPokaziAdmin(false)
-    fetchZadnjaUtakmica() 
+    fetchTrenutnaUtakmica() 
     fetchPoredak()
   }
 
   return (
-    <div className="flex flex-col items-center p-6 pb-20">
+    <div className="flex flex-col items-center p-6 pb-20 relative min-h-screen">
+      
+      {/* GUMB ZA PRAVILA (Gore desno) */}
+      <button 
+        onClick={() => setPokaziPravila(true)}
+        className="absolute top-6 right-6 bg-slate-800 border border-slate-600 text-slate-300 px-3 py-1 rounded-full text-sm font-bold shadow-lg hover:bg-slate-700 hover:text-white transition-all z-10"
+      >
+        Pravila 📜
+      </button>
+
+      {/* POPUP PROZOR ZA PRAVILA */}
+      {pokaziPravila && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setPokaziPravila(false)}>
+          <div className="bg-slate-800 border border-sky-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+              <h3 className="text-xl font-bold text-sky-400">Pravila Igre ⚪️🔵</h3>
+              <button onClick={() => setPokaziPravila(false)} className="text-slate-400 hover:text-white text-xl font-black">&times;</button>
+            </div>
+            <div className="text-sm text-slate-300 space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+              <p><strong className="text-white">Cilj:</strong> Pogoditi točan broj gledatelja na Rujevici.</p>
+              
+              <p className="text-sky-300 font-bold mt-2 pt-2 border-t border-slate-700">Plasman:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>1. mjesto (najbliži): <strong className="text-emerald-400">+3 boda</strong></li>
+                <li>2. mjesto: <strong className="text-emerald-400">+1 bod</strong></li>
+              </ul>
+
+              <p className="text-sky-300 font-bold mt-2 pt-2 border-t border-slate-700">Bonusi:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Snajper (promašaj do 20): <strong className="text-emerald-400">+5 bodova</strong></li>
+                <li>Oštro oko (promašaj do 100): <strong className="text-emerald-400">+2 boda</strong></li>
+              </ul>
+
+              <p className="text-red-300 font-bold mt-2 pt-2 border-t border-slate-700">Kazne:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Nedolazak (nisi igrao): <strong className="text-red-400">-2 boda</strong></li>
+                <li>Zadnji na tablici (uz promašaj preko 800): <strong className="text-red-400">-1 bod</strong></li>
+              </ul>
+
+              <p className="text-amber-300 font-bold mt-2 pt-2 border-t border-slate-700">Džoker 🦈 (Sami protiv svih):</p>
+              <p>Množi SVE tvoje bodove (i pluseve i minuse) s 2 u tom kolu!</p>
+            </div>
+            <button onClick={() => setPokaziPravila(false)} className="w-full mt-6 bg-sky-600 text-white font-bold py-2 rounded-xl hover:bg-sky-500">Razumijem!</button>
+          </div>
+        </div>
+      )}
+
       <header className="mb-6 text-center mt-6 w-full max-w-md">
         <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok Rujevice ⚪️🔵</h1>
         
@@ -154,7 +209,7 @@ function App() {
             <p className={`font-bold py-1 px-4 rounded-full inline-block mb-6 border ${aktivnaUtakmica.status === 'otvorena' ? 'text-white bg-sky-900/50 border-sky-700' : 'text-emerald-400 bg-emerald-900/50 border-emerald-700'}`}>
               ⚽ {aktivnaUtakmica.naziv} {aktivnaUtakmica.status === 'zavrsena' && '(ZAVRŠENO)'}
             </p>
-          ) : <p className="text-red-400 mb-6">Učitavanje...</p>}
+          ) : <p className="text-slate-400 mb-6 border border-slate-700 bg-slate-800 px-4 py-2 rounded-full">Trenutno nema utakmica ⏳</p>}
 
           {aktivnaUtakmica?.status === 'otvorena' && (
             <main className="w-full max-w-md bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 mb-6">
@@ -198,7 +253,6 @@ function App() {
                       {p.igraci?.ime} {p.joker && <span className="ml-1">🦈</span>}
                     </div>
                     <div className="flex items-center gap-4">
-                      {/* Prikaz brojke ILI teksta 'Nije igrao' */}
                       <div className={`text-xl font-black ${p.napomena === 'Nije igrao' ? 'text-slate-500 text-sm' : 'text-white'}`}>
                         {p.napomena === 'Nije igrao' ? 'Nije igrao' : p.broj_gledatelja}
                       </div>
