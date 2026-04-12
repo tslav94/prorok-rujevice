@@ -313,13 +313,13 @@ function App() {
               onClick={() => setPokaziAdmin(!pokaziAdmin)} 
               className="text-slate-400 text-sm font-bold mt-8 bg-slate-800 hover:bg-slate-700 hover:text-white px-6 py-3 rounded-xl border border-slate-600 transition-all shadow-md"
             >
-              ⚙️ SPIKER
+              📢 SPIKER
             </button>
           )}
 
           {pokaziAdmin && aktivnaUtakmica?.status === 'otvorena' && (
             <div className="w-full max-w-md bg-amber-900/30 p-6 rounded-2xl border border-amber-700/50 mt-4">
-              <h3 className="text-amber-500 font-bold mb-4 text-center">SPIKER TRIBINA</h3>
+              <h3 className="text-amber-500 font-bold mb-4 text-center">DANAS NAS SE SKUPILO...</h3>
               <input type="number" className="w-full bg-slate-900 border border-amber-700/50 rounded-lg p-3 text-center text-white mb-4" placeholder="Službeni broj gledatelja..." value={sluzbeniBroj} onChange={(e) => setSluzbeniBroj(e.target.value)} />
               <button onClick={zavrsiUtakmicu} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl">PODIJELI BODOVE 🏆</button>
             </div>
