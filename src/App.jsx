@@ -12,12 +12,10 @@ function App() {
   const [pokaziAdmin, setPokaziAdmin] = useState(false)
   const [sluzbeniBroj, setSluzbeniBroj] = useState('')
 
-  // 3 Taba sada: 'unos', 'povijest', 'tablica'
   const [aktivniTab, setAktivniTab] = useState('unos')
   const [poredak, setPoredak] = useState([])
   const [pokaziPravila, setPokaziPravila] = useState(false)
 
-  // NOVO: Stanja za povijest
   const [zavrseneUtakmice, setZavrseneUtakmice] = useState([])
   const [odabranaPovijestId, setOdabranaPovijestId] = useState('')
   const [povijestPrognoze, setPovijestPrognoze] = useState([])
@@ -29,7 +27,6 @@ function App() {
     fetchZavrseneUtakmice()
   }, [])
 
-  // Prati promjenu padajućeg izbornika u Povijesti
   useEffect(() => {
     if (odabranaPovijestId) {
       fetchPovijestPrognoze(odabranaPovijestId)
@@ -84,17 +81,14 @@ function App() {
     }
   }
 
-  // NOVO: Dohvaćanje svih završenih utakmica za arhivu
   async function fetchZavrseneUtakmice() {
     const { data } = await supabase.from('utakmice').select('*').eq('status', 'zavrsena').order('id', { ascending: false })
     if (data) setZavrseneUtakmice(data)
   }
 
-  // NOVO: Dohvaćanje prognoza za odabranu utakmicu u arhivu
   async function fetchPovijestPrognoze(utakmicaId) {
     const { data } = await supabase.from('prognoze').select('*, igraci(ime)').eq('utakmica_id', utakmicaId)
     if (data) {
-      // Sortiraj po bodovima (od najvećeg prema najmanjem)
       let sortirano = [...data].sort((a, b) => b.bodovi - a.bodovi)
       setPovijestPrognoze(sortirano)
     }
@@ -170,15 +164,16 @@ function App() {
     setPokaziAdmin(false)
     fetchTrenutnaUtakmica() 
     fetchPoredak()
-    fetchZavrseneUtakmice() // Osvježi listu za povijest
+    fetchZavrseneUtakmice()
   }
 
   return (
     <div className="flex flex-col items-center p-6 pb-20 relative min-h-screen">
       
+      {/* POPRAVLJENO POZICIONIRANJE GUMBA ZA PRAVILA */}
       <button 
         onClick={() => setPokaziPravila(true)}
-        className="absolute top-6 right-6 bg-slate-800 border border-slate-600 text-slate-300 px-3 py-1 rounded-full text-sm font-bold shadow-lg hover:bg-slate-700 hover:text-white transition-all z-10"
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 bg-slate-800 border border-slate-600 text-slate-300 px-3 py-1 rounded-full text-sm font-bold shadow-lg hover:bg-slate-700 hover:text-white transition-all z-10"
       >
         Pravila 📜
       </button>
@@ -219,10 +214,10 @@ function App() {
         </div>
       )}
 
-      <header className="mb-6 text-center mt-6 w-full max-w-md">
+      {/* POPRAVLJENA MARGINA HEADER-A */}
+      <header className="mb-6 text-center mt-12 sm:mt-6 w-full max-w-md">
         <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok Rujevice ⚪️🔵</h1>
         
-        {/* NAVIGACIJA SA 3 TABA */}
         <div className="flex bg-slate-800 rounded-xl p-1 mt-6 border border-slate-700">
           <button onClick={() => setAktivniTab('unos')} className={`flex-1 py-2 rounded-lg font-bold transition-all text-sm sm:text-base ${aktivniTab === 'unos' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Aktivno</button>
           <button onClick={() => setAktivniTab('povijest')} className={`flex-1 py-2 rounded-lg font-bold transition-all text-sm sm:text-base ${aktivniTab === 'povijest' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Povijest</button>
@@ -278,20 +273,25 @@ function App() {
                 {svePrognoze.sort((a,b) => aktivnaUtakmica?.status === 'zavrsena' ? Math.abs(a.broj_gledatelja - aktivnaUtakmica.sluzbeni_broj) - Math.abs(b.broj_gledatelja - aktivnaUtakmica.sluzbeni_broj) : 0).map((p) => (
                   <div key={p.id} className="bg-slate-900 p-4 rounded-xl flex justify-between items-center border border-slate-700">
                     <div className="font-bold text-lg text-slate-300">
-                      {/* Otkrij Džokera tek kad je utakmica završena */}
                       {p.igraci?.ime} {aktivnaUtakmica?.status === 'zavrsena' && p.joker && <span className="ml-1">🦈</span>}
                     </div>
                     <div className="flex items-center gap-4">
                       
-                      {/* LOGIKA SKRIVANJA PROGNOZA */}
                       {aktivnaUtakmica?.status === 'otvorena' ? (
                         <div className="text-emerald-400 font-bold text-sm tracking-wide flex items-center gap-2">
                            Prognoza spremljena <span className="text-xl">🔒</span>
                         </div>
                       ) : (
                         <>
-                          <div className={`text-xl font-black ${p.napomena === 'Nije igrao' ? 'text-slate-500 text-sm' : 'text-white'}`}>
-                            {p.napomena === 'Nije igrao' ? 'Nije igrao' : p.broj_gledatelja}
+                          <div className="flex flex-col items-end">
+                            <div className={`text-xl font-black ${p.napomena === 'Nije igrao' ? 'text-slate-500 text-sm' : 'text-white'}`}>
+                              {p.napomena === 'Nije igrao' ? 'Nije igrao' : p.broj_gledatelja}
+                            </div>
+                            {p.napomena !== 'Nije igrao' && (
+                              <div className="text-xs text-slate-400 font-medium mt-1">
+                                Razlika: {p.broj_gledatelja - aktivnaUtakmica.sluzbeni_broj > 0 ? '+' : ''}{p.broj_gledatelja - aktivnaUtakmica.sluzbeni_broj}
+                              </div>
+                            )}
                           </div>
                           
                           <div className={`font-black text-xl w-8 text-center ${p.bodovi > 0 ? 'text-emerald-400' : p.bodovi < 0 ? 'text-red-400' : 'text-slate-500'}`}>
@@ -307,7 +307,7 @@ function App() {
             </section>
           )}
 
-          {/* NOVI I BOLJI GUMB ZA SPIKERA */}
+          {/* TVOJE IZMJENE ZA SPIKERA */}
           {aktivnaUtakmica?.status === 'otvorena' && (
             <button 
               onClick={() => setPokaziAdmin(!pokaziAdmin)} 
@@ -319,7 +319,7 @@ function App() {
 
           {pokaziAdmin && aktivnaUtakmica?.status === 'otvorena' && (
             <div className="w-full max-w-md bg-amber-900/30 p-6 rounded-2xl border border-amber-700/50 mt-4">
-              <h3 className="text-amber-500 font-bold mb-4 text-center">DANAS NAS SE SKUPILO...</h3>
+              <h3 className="text-amber-500 font-bold mb-4 text-center uppercase">DANAS NAS SE SKUPILO...</h3>
               <input type="number" className="w-full bg-slate-900 border border-amber-700/50 rounded-lg p-3 text-center text-white mb-4" placeholder="Službeni broj gledatelja..." value={sluzbeniBroj} onChange={(e) => setSluzbeniBroj(e.target.value)} />
               <button onClick={zavrsiUtakmicu} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl">PODIJELI BODOVE 🏆</button>
             </div>
@@ -361,21 +361,33 @@ function App() {
               })()}
               
               <div className="space-y-3">
-                {povijestPrognoze.map((p) => (
-                  <div key={p.id} className="bg-slate-900 p-4 rounded-xl flex justify-between items-center border border-slate-700">
-                    <div className="font-bold text-lg text-slate-300">
-                      {p.igraci?.ime} {p.joker && <span className="ml-1">🦈</span>}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className={`text-xl font-black ${p.napomena === 'Nije igrao' ? 'text-slate-500 text-sm' : 'text-white'}`}>
-                        {p.napomena === 'Nije igrao' ? 'Nije igrao' : p.broj_gledatelja}
+                {povijestPrognoze.map((p) => {
+                  const odabranaObj = zavrseneUtakmice.find(u => u.id.toString() === odabranaPovijestId);
+                  return (
+                    <div key={p.id} className="bg-slate-900 p-4 rounded-xl flex justify-between items-center border border-slate-700">
+                      <div className="font-bold text-lg text-slate-300">
+                        {p.igraci?.ime} {p.joker && <span className="ml-1">🦈</span>}
                       </div>
-                      <div className={`font-black text-xl w-8 text-center ${p.bodovi > 0 ? 'text-emerald-400' : p.bodovi < 0 ? 'text-red-400' : 'text-slate-500'}`}>
-                        {p.bodovi > 0 ? `+${p.bodovi}` : p.bodovi}
+                      <div className="flex items-center gap-4">
+                        
+                        <div className="flex flex-col items-end">
+                          <div className={`text-xl font-black ${p.napomena === 'Nije igrao' ? 'text-slate-500 text-sm' : 'text-white'}`}>
+                            {p.napomena === 'Nije igrao' ? 'Nije igrao' : p.broj_gledatelja}
+                          </div>
+                          {p.napomena !== 'Nije igrao' && (
+                            <div className="text-xs text-slate-400 font-medium mt-1">
+                              Razlika: {p.broj_gledatelja - odabranaObj?.sluzbeni_broj > 0 ? '+' : ''}{p.broj_gledatelja - odabranaObj?.sluzbeni_broj}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className={`font-black text-xl w-8 text-center ${p.bodovi > 0 ? 'text-emerald-400' : p.bodovi < 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                          {p.bodovi > 0 ? `+${p.bodovi}` : p.bodovi}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </section>
           )}
