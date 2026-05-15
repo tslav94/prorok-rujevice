@@ -20,6 +20,8 @@ function App() {
   const [odabranaPovijestId, setOdabranaPovijestId] = useState('')
   const [povijestPrognoze, setPovijestPrognoze] = useState([])
 
+  const [ucitavanje, setUcitavanje] = useState(false)
+
   useEffect(() => {
     fetchIgraci()
     fetchTrenutnaUtakmica()
@@ -99,8 +101,21 @@ function App() {
     if (!prognoza || prognoza <= 0) return alert("Unesi neki normalan broj gledatelja!")
     if (!aktivnaUtakmica || aktivnaUtakmica.status !== 'otvorena') return alert("Utakmica je zaključana!")
 
+    if (ucitavanje) return;
+    setUcitavanje(true);
+
     const vecUnio = svePrognoze.find(p => p.igrac_id === parseInt(odabraniIgrac))
-    if (vecUnio) return alert("Već si unio prognozu za ovu utakmicu, nema varanja!")
+    if (vecUnio) {
+      setUcitavanje(false);
+      return alert("Već si unio prognozu za ovu utakmicu, nema varanja!");
+    }
+
+    // ZAŠTITA: Provjera je li ostalo Džokera prije slanja
+    const igracPodaci = igraci.find(i => i.id === parseInt(odabraniIgrac));
+    if (koristiDzoker && igracPodaci && igracPodaci.preostali_dzokeri <= 0) {
+      setUcitavanje(false);
+      return alert("Nemaš više Džokera na raspolaganju! Makni kvačicu.");
+    }
 
     const { error } = await supabase.from('prognoze').insert([{
       igrac_id: odabraniIgrac,
@@ -114,10 +129,16 @@ function App() {
       setPrognoza(''); setKoristiDzoker(false); setOdabraniIgrac('');
       fetchPrognoze(aktivnaUtakmica.id)
     }
+    
+    setUcitavanje(false);
   }
 
   const zavrsiUtakmicu = async () => {
     if (!sluzbeniBroj) return alert("Unesi službeni broj sa stadiona!")
+    
+    if (ucitavanje) return;
+    setUcitavanje(true);
+
     const tocanBroj = parseInt(sluzbeniBroj)
 
     const igraciKojiSuIgraliIds = svePrognoze.map(p => p.igrac_id)
@@ -143,7 +164,10 @@ function App() {
       
       if (p.joker) {
         const { data: igracData } = await supabase.from('igraci').select('preostali_dzokeri').eq('id', p.igrac_id).single()
-        await supabase.from('igraci').update({ preostali_dzokeri: igracData.preostali_dzokeri - 1 }).eq('id', p.igrac_id)
+        // DODANA ZAŠTITA DA NE IDE ISPOD NULE (iako prednji kraj to sada svakako brani)
+        let noviBroj = igracData.preostali_dzokeri - 1;
+        if (noviBroj < 0) noviBroj = 0;
+        await supabase.from('igraci').update({ preostali_dzokeri: noviBroj }).eq('id', p.igrac_id)
       }
     }
 
@@ -162,15 +186,34 @@ function App() {
 
     alert("Bodovi izračunati! Kazne za neigranje (-2) su dodijeljene.")
     setPokaziAdmin(false)
+    setUcitavanje(false);
+    
     fetchTrenutnaUtakmica() 
     fetchPoredak()
     fetchZavrseneUtakmice()
   }
 
+  // Funkcija koja pali/gasi džokera klikom na prozorčić s provjerom
+  const toggleDzoker = () => {
+    if (!odabraniIgrac) {
+      return alert("Prvo odaberi tko si u padajućem izborniku gore!");
+    }
+    const igracPodaci = igraci.find(i => i.id === parseInt(odabraniIgrac));
+    if (!koristiDzoker && igracPodaci && igracPodaci.preostali_dzokeri <= 0) {
+      return alert("Potrošio si sve Džokere 🦈! Nemaš ih više na raspolaganju.");
+    }
+    setKoristiDzoker(!koristiDzoker);
+  }
+
+  // Funkcija kad se mijenja igrač u izborniku
+  const handleIgracPromjena = (e) => {
+    setOdabraniIgrac(e.target.value);
+    setKoristiDzoker(false); // Resetiraj džoker kućicu kad god netko promijeni igrača
+  }
+
   return (
     <div className="flex flex-col items-center p-6 pb-20 relative min-h-screen">
       
-      {/* POPRAVLJENO POZICIONIRANJE GUMBA ZA PRAVILA */}
       <button 
         onClick={() => setPokaziPravila(true)}
         className="absolute top-4 right-4 sm:top-6 sm:right-6 bg-slate-800 border border-slate-600 text-slate-300 px-3 py-1 rounded-full text-sm font-bold shadow-lg hover:bg-slate-700 hover:text-white transition-all z-10"
@@ -214,7 +257,6 @@ function App() {
         </div>
       )}
 
-      {/* POPRAVLJENA MARGINA HEADER-A */}
       <header className="mb-6 text-center mt-12 sm:mt-6 w-full max-w-md">
         <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok Rujevice ⚪️🔵</h1>
         
@@ -240,7 +282,7 @@ function App() {
               
               <div className="mb-6">
                 <label className="block text-slate-400 text-sm mb-2 font-bold uppercase tracking-wider">Tko si ti?</label>
-                <select className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-sky-500" value={odabraniIgrac} onChange={(e) => setOdabraniIgrac(e.target.value)}>
+                <select className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-sky-500" value={odabraniIgrac} onChange={handleIgracPromjena}>
                   <option value="">-- Odaberi svog proroka --</option>
                   {igraci.map((igrac) => <option key={igrac.id} value={igrac.id}>{igrac.ime} (Džokera: {igrac.preostali_dzokeri})</option>)}
                 </select>
@@ -251,7 +293,7 @@ function App() {
                 <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-4 text-3xl text-center text-white focus:outline-none focus:border-sky-500" placeholder="npr. 6543" value={prognoza} onChange={(e) => setPrognoza(e.target.value)} />
               </div>
 
-              <div className={`mb-8 flex items-center justify-between p-4 rounded-xl cursor-pointer border-2 transition-all ${koristiDzoker ? 'bg-sky-900/40 border-sky-500' : 'bg-slate-900 border-slate-700'}`} onClick={() => setKoristiDzoker(!koristiDzoker)}>
+              <div className={`mb-8 flex items-center justify-between p-4 rounded-xl cursor-pointer border-2 transition-all ${koristiDzoker ? 'bg-sky-900/40 border-sky-500' : 'bg-slate-900 border-slate-700'}`} onClick={toggleDzoker}>
                 <div>
                   <p className={`font-bold ${koristiDzoker ? 'text-sky-400' : 'text-white'}`}>Sami protiv svih (Džoker 🦈)</p>
                 </div>
@@ -260,7 +302,13 @@ function App() {
                 </div>
               </div>
 
-              <button onClick={posaljiPrognozu} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-extrabold py-4 rounded-xl shadow-lg transition-transform active:scale-95 text-lg">ZAKLJUČAJ 🔒</button>
+              <button 
+                onClick={posaljiPrognozu} 
+                disabled={ucitavanje}
+                className={`w-full text-white font-extrabold py-4 rounded-xl shadow-lg transition-transform text-lg ${ucitavanje ? 'bg-slate-600 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-500 active:scale-95'}`}
+              >
+                {ucitavanje ? 'ŠALJEM... ⏳' : 'ZAKLJUČAJ 🔒'}
+              </button>
             </main>
           )}
 
@@ -307,7 +355,6 @@ function App() {
             </section>
           )}
 
-          {/* TVOJE IZMJENE ZA SPIKERA */}
           {aktivnaUtakmica?.status === 'otvorena' && (
             <button 
               onClick={() => setPokaziAdmin(!pokaziAdmin)} 
@@ -321,7 +368,14 @@ function App() {
             <div className="w-full max-w-md bg-amber-900/30 p-6 rounded-2xl border border-amber-700/50 mt-4">
               <h3 className="text-amber-500 font-bold mb-4 text-center uppercase">DANAS NAS SE SKUPILO...</h3>
               <input type="number" className="w-full bg-slate-900 border border-amber-700/50 rounded-lg p-3 text-center text-white mb-4" placeholder="Službeni broj gledatelja..." value={sluzbeniBroj} onChange={(e) => setSluzbeniBroj(e.target.value)} />
-              <button onClick={zavrsiUtakmicu} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl">PODIJELI BODOVE 🏆</button>
+              
+              <button 
+                onClick={zavrsiUtakmicu} 
+                disabled={ucitavanje}
+                className={`w-full text-white font-bold py-3 rounded-xl ${ucitavanje ? 'bg-slate-600 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-500'}`}
+              >
+                {ucitavanje ? 'DIJELIM BODOVE... ⏳' : 'PODIJELI BODOVE 🏆'}
+              </button>
             </div>
           )}
         </div>
