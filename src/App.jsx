@@ -337,7 +337,7 @@ function App() {
                 <li>🎯 <strong className="text-white">Snajper:</strong> Promašaj za 20 ili manje gledatelja.</li>
                 <li>🦈 <strong className="text-white">Hrabro srce:</strong> Uspješan Džoker (završio u plusu).</li>
                 <li>😎 <strong className="text-white">Fotofiniš:</strong> Pobjeda s manje od 50 razlike u odnosu na drugog.</li>
-                <li>🫏 <strong className="text-white">Tovar:</strong> Osvojeno 1. mjesto na utakmici protiv Hajduka.</li>
+                <li>🐴 <strong className="text-white">Tovar:</strong> Osvojeno 1. mjesto na utakmici protiv Hajduka.</li>
                 <li>🤡 <strong className="text-white">Klaun:</strong> Zadnje mjesto u kolu s promašajem većim od 800.</li>
                 <li>🛌 <strong className="text-white">Spavalica:</strong> Zaboravio odigrati kolo (-2 boda).</li>
               </ul>
@@ -567,7 +567,7 @@ function App() {
                         {s.bSnajper > 0 && <span title="Snajper">🎯{s.bSnajper > 1 && <span className="text-[10px]">x{s.bSnajper}</span>}</span>}
                         {s.bHrabro > 0 && <span title="Hrabro srce">🦈{s.bHrabro > 1 && <span className="text-[10px]">x{s.bHrabro}</span>}</span>}
                         {s.bFotofinis > 0 && <span title="Fotofiniš">😎{s.bFotofinis > 1 && <span className="text-[10px]">x{s.bFotofinis}</span>}</span>}
-                        {s.bTovar > 0 && <span title="Tovar">🫏{s.bTovar > 1 && <span className="text-[10px]">x{s.bTovar}</span>}</span>}
+                        {s.bTovar > 0 && <span title="Tovar">🐴{s.bTovar > 1 && <span className="text-[10px]">x{s.bTovar}</span>}</span>}
                         {s.bKlaun > 0 && <span title="Klaun">🤡{s.bKlaun > 1 && <span className="text-[10px]">x{s.bKlaun}</span>}</span>}
                         {s.bSpavalica > 0 && <span title="Spavalica">🛌{s.bSpavalica > 1 && <span className="text-[10px]">x{s.bSpavalica}</span>}</span>}
                       </div>
@@ -619,7 +619,7 @@ function App() {
                     😎 Fotofiniš: {igrac.bFotofinis || 0}
                   </span>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bTovar > 0 ? 'bg-blue-900/30 text-blue-400 border-blue-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
-                    🫏 Tovar: {igrac.bTovar || 0}
+                    🐴 Tovar: {igrac.bTovar || 0}
                   </span>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bKlaun > 0 ? 'bg-pink-900/30 text-pink-400 border-pink-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
                     🤡 Klaun: {igrac.bKlaun || 0}
