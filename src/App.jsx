@@ -61,7 +61,6 @@ function App() {
       }
     }
     
-    // Za Spikera - dohvati sve da može otključavati nova kola
     const { data: sveUtakmice } = await supabase.from('utakmice').select('*').order('id', { ascending: true })
     if (sveUtakmice) setUtakmiceAdmin(sveUtakmice)
   }
@@ -94,48 +93,69 @@ function App() {
 
   async function fetchStatistika() {
     const { data: igraciData } = await supabase.from('igraci').select('*');
-    const { data: prognozeData } = await supabase.from('prognoze').select('*, utakmice(id, sluzbeni_broj, status)');
+    const { data: prognozeData } = await supabase.from('prognoze').select('*, utakmice(id, naziv, sluzbeni_broj, status)');
 
     if (igraciData && prognozeData) {
-      // 1. Tko je pobijedio u kojem kolu
       const zavrseneIds = [...new Set(prognozeData.filter(p => p.utakmice?.status === 'zavrsena').map(p => p.utakmica_id))];
-      const pobjednici = {};
       
+      const badgeCounts = {};
+      igraciData.forEach(i => {
+        badgeCounts[i.id] = { bProrok: 0, bSnajper: 0, bSpavalica: 0, bHrabro: 0, bTovar: 0, bFotofinis: 0, bKlaun: 0, sumaRazlika: 0, odigranoPravih: 0, najbolji: null };
+      });
+
       zavrseneIds.forEach(uId => {
         const pZaKolo = prognozeData.filter(p => p.utakmica_id === uId && p.napomena !== 'Nije igrao');
+        const spavalice = prognozeData.filter(p => p.utakmica_id === uId && p.napomena === 'Nije igrao');
+        
+        spavalice.forEach(s => badgeCounts[s.igrac_id].bSpavalica++);
+
         if (pZaKolo.length > 0) {
           pZaKolo.sort((a,b) => Math.abs(a.broj_gledatelja - a.utakmice.sluzbeni_broj) - Math.abs(b.broj_gledatelja - b.utakmice.sluzbeni_broj));
-          pobjednici[uId] = pZaKolo[0].igrac_id;
+          
+          const pobjednik = pZaKolo[0];
+          const nazivUtakmice = pobjednik.utakmice.naziv.toLowerCase();
+          
+          badgeCounts[pobjednik.igrac_id].bProrok++;
+          
+          if (nazivUtakmice.includes('hajduk')) {
+            badgeCounts[pobjednik.igrac_id].bTovar++;
+          }
+          
+          if (pZaKolo.length > 1) {
+            const razlikaPrvi = Math.abs(pobjednik.broj_gledatelja - pobjednik.utakmice.sluzbeni_broj);
+            const razlikaDrugi = Math.abs(pZaKolo[1].broj_gledatelja - pZaKolo[1].utakmice.sluzbeni_broj);
+            if (razlikaDrugi - razlikaPrvi < 50) {
+              badgeCounts[pobjednik.igrac_id].bFotofinis++;
+            }
+          }
+
+          const zadnji = pZaKolo[pZaKolo.length - 1];
+          const razlikaZadnji = Math.abs(zadnji.broj_gledatelja - zadnji.utakmice.sluzbeni_broj);
+          if (razlikaZadnji >= 800) {
+            badgeCounts[zadnji.igrac_id].bKlaun++;
+          }
+
+          pZaKolo.forEach(p => {
+            const razlika = Math.abs(p.broj_gledatelja - p.utakmice.sluzbeni_broj);
+            badgeCounts[p.igrac_id].sumaRazlika += razlika;
+            badgeCounts[p.igrac_id].odigranoPravih++;
+            
+            if (badgeCounts[p.igrac_id].najbolji === null || razlika < badgeCounts[p.igrac_id].najbolji) {
+              badgeCounts[p.igrac_id].najbolji = razlika;
+            }
+            if (razlika <= 20) badgeCounts[p.igrac_id].bSnajper++;
+            if (p.joker && p.bodovi > 0) badgeCounts[p.igrac_id].bHrabro++;
+          });
         }
       });
 
-      // 2. Izračun po igraču
       const stats = igraciData.map(igrac => {
-        const moje = prognozeData.filter(p => p.igrac_id === igrac.id && p.utakmice?.status === 'zavrsena');
-        let sumaRazlika = 0, odigranoPravih = 0;
-        let bSnajper = 0, bProrok = 0, bSpavalica = 0, bHrabro = 0;
-        let najbolji = null;
-
-        moje.forEach(p => {
-          if (p.napomena === 'Nije igrao') {
-            bSpavalica++;
-          } else {
-            odigranoPravih++;
-            const razlika = Math.abs(p.broj_gledatelja - p.utakmice.sluzbeni_broj);
-            sumaRazlika += razlika;
-            
-            if (najbolji === null || razlika < najbolji) najbolji = razlika;
-            if (razlika <= 20) bSnajper++;
-            if (p.joker && p.bodovi > 0) bHrabro++;
-            if (pobjednici[p.utakmica_id] === igrac.id) bProrok++;
-          }
-        });
-
+        const b = badgeCounts[igrac.id];
         return {
           ...igrac,
-          prosjek: odigranoPravih > 0 ? Math.round(sumaRazlika / odigranoPravih) : '-',
-          najbolji: najbolji !== null ? najbolji : '-',
-          bSnajper, bProrok, bSpavalica, bHrabro
+          prosjek: b.odigranoPravih > 0 ? Math.round(b.sumaRazlika / b.odigranoPravih) : '-',
+          najbolji: b.najbolji !== null ? b.najbolji : '-',
+          ...b
         }
       });
 
@@ -287,7 +307,7 @@ function App() {
               <h3 className="text-xl font-bold text-sky-400">Pravila Igre ⚪️🔵</h3>
               <button onClick={() => setPokaziPravila(false)} className="text-slate-400 hover:text-white text-xl font-black">&times;</button>
             </div>
-            <div className="text-sm text-slate-300 space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="text-sm text-slate-300 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
               <p><strong className="text-white">Cilj:</strong> Pogoditi točan broj gledatelja na Rujevici.</p>
               
               <p className="text-sky-300 font-bold mt-2 pt-2 border-t border-slate-700">Plasman:</p>
@@ -310,6 +330,17 @@ function App() {
 
               <p className="text-amber-300 font-bold mt-2 pt-2 border-t border-slate-700">Džoker 🦈 (Sami protiv svih):</p>
               <p>Množi SVE tvoje bodove (i pluseve i minuse) s 2 u tom kolu!</p>
+
+              <p className="text-fuchsia-300 font-bold mt-4 pt-2 border-t border-slate-700">Trofeji (Bedževi) 🏆:</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li>👑 <strong className="text-white">Prorok kola:</strong> Osvojeno 1. mjesto u kolu.</li>
+                <li>🎯 <strong className="text-white">Snajper:</strong> Promašaj za 20 ili manje gledatelja.</li>
+                <li>🦈 <strong className="text-white">Hrabro srce:</strong> Uspješan Džoker (završio u plusu).</li>
+                <li>😎 <strong className="text-white">Fotofiniš:</strong> Pobjeda s manje od 50 razlike u odnosu na drugog.</li>
+                <li>🫏 <strong className="text-white">Tovar:</strong> Osvojeno 1. mjesto na utakmici protiv Hajduka.</li>
+                <li>🤡 <strong className="text-white">Klaun:</strong> Zadnje mjesto u kolu s promašajem većim od 800.</li>
+                <li>🛌 <strong className="text-white">Spavalica:</strong> Zaboravio odigrati kolo (-2 boda).</li>
+              </ul>
             </div>
             <button onClick={() => setPokaziPravila(false)} className="w-full mt-6 bg-sky-600 text-white font-bold py-2 rounded-xl hover:bg-sky-500">Razumijem!</button>
           </div>
@@ -319,7 +350,6 @@ function App() {
       <header className="mb-6 text-center mt-12 sm:mt-6 w-full max-w-md">
         <h1 className="text-4xl font-extrabold text-sky-400 mb-2 drop-shadow-md">Prorok Rujevice ⚪️🔵</h1>
         
-        {/* NAVIGACIJA */}
         <div className="grid grid-cols-4 gap-1 bg-slate-800 rounded-xl p-1 mt-6 border border-slate-700">
           <button onClick={() => setAktivniTab('unos')} className={`py-2 rounded-lg font-bold transition-all text-xs sm:text-sm ${aktivniTab === 'unos' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Aktivno</button>
           <button onClick={() => setAktivniTab('povijest')} className={`py-2 rounded-lg font-bold transition-all text-xs sm:text-sm ${aktivniTab === 'povijest' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Povijest</button>
@@ -422,8 +452,6 @@ function App() {
 
           {pokaziAdmin && (
             <div className="w-full max-w-md bg-amber-900/30 p-6 rounded-2xl border border-amber-700/50 mt-4 space-y-6">
-              
-              {/* OTVARANJE KOLA */}
               <div>
                 <h3 className="text-amber-500 font-bold mb-2 uppercase text-sm border-b border-amber-700/50 pb-1">Otvori iduće kolo</h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2 mt-2">
@@ -439,7 +467,6 @@ function App() {
                 </div>
               </div>
 
-              {/* ZATVARANJE KOLA */}
               {aktivnaUtakmica?.status === 'otvorena' && (
                 <div>
                   <h3 className="text-amber-500 font-bold mb-2 uppercase text-sm border-b border-amber-700/50 pb-1">Zaključi trenutno kolo</h3>
@@ -514,35 +541,50 @@ function App() {
         </div>
       )}
 
-      {/* VIEW: TABLICA */}
+      {/* VIEW: TABLICA (SA BEDŽEVIMA) */}
       {aktivniTab === 'tablica' && (
         <div className="w-full max-w-md bg-slate-800 p-6 rounded-2xl shadow-xl border border-amber-700/50">
           <h2 className="text-2xl font-bold mb-6 text-center text-amber-500 border-b border-slate-700 pb-4">Ukupni Poredak</h2>
           <div className="space-y-4">
-            {poredak.map((igrac, index) => (
-              <div key={igrac.id} className="bg-slate-900 p-4 rounded-xl flex justify-between items-center border border-slate-700 relative overflow-hidden">
-                {index === 0 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>}
-                {index === 1 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-300"></div>}
-                {index === 2 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-700"></div>}
-                <div className="flex items-center gap-4">
-                  <div className={`font-black text-xl w-6 text-center ${index === 0 ? 'text-amber-500' : index === 1 ? 'text-slate-300' : index === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
-                    {index + 1}.
+            {poredak.map((igrac, index) => {
+              const s = statistika.find(stat => stat.id === igrac.id) || {};
+              return (
+                <div key={igrac.id} className="bg-slate-900 p-4 rounded-xl flex justify-between items-center border border-slate-700 relative overflow-hidden">
+                  {index === 0 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>}
+                  {index === 1 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-300"></div>}
+                  {index === 2 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-700"></div>}
+                  <div className="flex items-center gap-4">
+                    <div className={`font-black text-xl w-6 text-center ${index === 0 ? 'text-amber-500' : index === 1 ? 'text-slate-300' : index === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
+                      {index + 1}.
+                    </div>
+                    <div>
+                      <p className="font-bold text-lg text-white">{igrac.ime}</p>
+                      <p className="text-xs text-slate-500">Odigrano: {igrac.odigrano} | Preostalo 🦈: {igrac.preostali_dzokeri}</p>
+                      
+                      {/* REDAK S BEDŽEVIMA U TABLICI */}
+                      <div className="flex gap-1 mt-1 text-sm">
+                        {s.bProrok > 0 && <span title="Prorok kola">👑{s.bProrok > 1 && <span className="text-[10px]">x{s.bProrok}</span>}</span>}
+                        {s.bSnajper > 0 && <span title="Snajper">🎯{s.bSnajper > 1 && <span className="text-[10px]">x{s.bSnajper}</span>}</span>}
+                        {s.bHrabro > 0 && <span title="Hrabro srce">🦈{s.bHrabro > 1 && <span className="text-[10px]">x{s.bHrabro}</span>}</span>}
+                        {s.bFotofinis > 0 && <span title="Fotofiniš">😎{s.bFotofinis > 1 && <span className="text-[10px]">x{s.bFotofinis}</span>}</span>}
+                        {s.bTovar > 0 && <span title="Tovar">🫏{s.bTovar > 1 && <span className="text-[10px]">x{s.bTovar}</span>}</span>}
+                        {s.bKlaun > 0 && <span title="Klaun">🤡{s.bKlaun > 1 && <span className="text-[10px]">x{s.bKlaun}</span>}</span>}
+                        {s.bSpavalica > 0 && <span title="Spavalica">🛌{s.bSpavalica > 1 && <span className="text-[10px]">x{s.bSpavalica}</span>}</span>}
+                      </div>
+
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-bold text-lg text-white">{igrac.ime}</p>
-                    <p className="text-xs text-slate-500">Odigrano: {igrac.odigrano} | Preostalo 🦈: {igrac.preostali_dzokeri}</p>
+                  <div className={`text-3xl font-black ${igrac.ukupno < 0 ? 'text-red-500' : 'text-amber-400'}`}>
+                    {igrac.ukupno}
                   </div>
                 </div>
-                <div className={`text-3xl font-black ${igrac.ukupno < 0 ? 'text-red-500' : 'text-amber-400'}`}>
-                  {igrac.ukupno}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* VIEW: STATISTIKA */}
+      {/* VIEW: STATISTIKA (TROFEJNA SOBA - POTPUNA) */}
       {aktivniTab === 'statistika' && (
         <div className="w-full max-w-md bg-slate-800 p-6 rounded-2xl shadow-xl border border-emerald-700/50">
           <h2 className="text-2xl font-bold mb-6 text-center text-emerald-400 border-b border-slate-700 pb-4">Trofejna Soba</h2>
@@ -565,16 +607,25 @@ function App() {
 
                 <div className="flex flex-wrap gap-2">
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bProrok > 0 ? 'bg-amber-900/30 text-amber-400 border-amber-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
-                    👑 Prorok kola: {igrac.bProrok}
+                    👑 Prorok: {igrac.bProrok || 0}
                   </span>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bSnajper > 0 ? 'bg-sky-900/30 text-sky-400 border-sky-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
-                    🎯 Snajper: {igrac.bSnajper}
+                    🎯 Snajper: {igrac.bSnajper || 0}
                   </span>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bHrabro > 0 ? 'bg-indigo-900/30 text-indigo-400 border-indigo-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
-                    🦈 Hrabro srce: {igrac.bHrabro}
+                    🦈 Hrabro: {igrac.bHrabro || 0}
+                  </span>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bFotofinis > 0 ? 'bg-orange-900/30 text-orange-400 border-orange-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
+                    😎 Fotofiniš: {igrac.bFotofinis || 0}
+                  </span>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bTovar > 0 ? 'bg-blue-900/30 text-blue-400 border-blue-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
+                    🫏 Tovar: {igrac.bTovar || 0}
+                  </span>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bKlaun > 0 ? 'bg-pink-900/30 text-pink-400 border-pink-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
+                    🤡 Klaun: {igrac.bKlaun || 0}
                   </span>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md border ${igrac.bSpavalica > 0 ? 'bg-red-900/30 text-red-400 border-red-700' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
-                    🛌 Spavalica: {igrac.bSpavalica}
+                    🛌 Spavalica: {igrac.bSpavalica || 0}
                   </span>
                 </div>
               </div>
